@@ -2,48 +2,52 @@ const utils = require('../utils');
 
 const poolsFunction = async () => {
   try {
-    const response = await utils.getData('https://api.infinifi.xyz/api/protocol/data');
-    const data = response.data;
+    const data = await utils.getData('https://api.infinifi.xyz/api/protocol/data');
     
+    if (!data || data.code !== "OK" || !data.data || !data.data.stats) {
+      return [];
+    }
+
+    const stats = data.data.stats;
     const pools = [];
-    const USDC_ADDRESS = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
     
-    
-    if (data.stats.siusd) {
-      const siusdData = data.stats.siusd;
-      const tvl = siusdData.totalSupplyNormalized || 0;
-      const apy = (siusdData.lastWeekAPY || 0) * 100;
+    // Process siUSD pool
+    if (stats.siusd) {
+      const siusdData = stats.siusd;
+      const tvl = parseFloat(siusdData.totalSupplyNormalized || 0);
+      const apy = parseFloat(siusdData.lastWeekAPY || 0) * 100;
       
-      if (tvl > 10000) {
+      if (tvl >= 10000) {
         pools.push({
           pool: `${siusdData.address}-ethereum`.toLowerCase(),
           chain: utils.formatChain('ethereum'),
           project: 'infinifi',
           symbol: utils.formatSymbol('siUSD'),
           tvlUsd: tvl,
-          apy: apy,
-          underlyingTokens: [USDC_ADDRESS],
+          apyBase: apy,
           poolMeta: 'Staked iUSD',
           url: 'https://infinifi.xyz/',
         });
       }
     }
     
-    if (data.stats.liusd) {
-      Object.values(data.stats.liusd).forEach((liusdToken) => {
-        const tvl = liusdToken.totalSupplyNormalized || 0;
-        const apy = (liusdToken.lastWeekAPY || 0) * 100;
-        const weeks = liusdToken.bucketMaturity;
+    // Process liUSD pools
+    if (stats.liusd) {
+      Object.keys(stats.liusd).forEach((poolKey) => {
+        const liusdToken = stats.liusd[poolKey];
+        const tvl = parseFloat(liusdToken.totalSupplyNormalized || 0);
+        const apy = parseFloat(liusdToken.lastWeekAPY || 0) * 100;
+        const weeks = liusdToken.bucketMaturity || 'Unknown';
+        const name = liusdToken.name || `liUSD-${weeks}w`;
         
-        if (tvl > 10000) {
+        if (tvl >= 10000) {
           pools.push({
             pool: `${liusdToken.address}-ethereum`.toLowerCase(),
             chain: utils.formatChain('ethereum'),
             project: 'infinifi',
-            symbol: utils.formatSymbol(liusdToken.name),
+            symbol: utils.formatSymbol(name),
             tvlUsd: tvl,
-            apy: apy,
-            underlyingTokens: [USDC_ADDRESS],
+            apyBase: apy,
             poolMeta: `Locked iUSD - ${weeks} week${weeks > 1 ? 's' : ''}`,
             url: 'https://infinifi.xyz/',
           });
@@ -51,7 +55,7 @@ const poolsFunction = async () => {
       });
     }
     
-    return pools;
+    return pools.filter((p) => utils.keepFinite(p));
     
   } catch (error) {
     console.error('Error fetching infiniFi data:', error);
