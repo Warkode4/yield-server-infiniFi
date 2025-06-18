@@ -12,7 +12,6 @@ const lockingControllerCallData = {
 
 const poolsFunction = async () => {
   try {
-    const pools = [];
 
     pools.push(await computeStakedTokenAPY());
 
